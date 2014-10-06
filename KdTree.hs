@@ -1,10 +1,19 @@
+{-# LANGUAGE BangPatterns     #-}
+{-# LANGUAGE FlexibleContexts #-}
+
 module KdTree where
 
+import qualified Data.Foldable       as F
+import qualified Data.List           as L
+import qualified Data.Vector.Unboxed as U
+import qualified Data.Vector.Generic as G
+
+import Data.Vector.Unboxed (Vector)
+import Data.Function       (on)
+
+import Data.Vector.Algorithms.Intro
+import Control.Monad.ST
 import Data.Maybe
-
-import qualified Data.Foldable     as F
-import qualified Data.List         as L
-
 import Test.QuickCheck
 
 import Debug.Trace
@@ -19,7 +28,7 @@ class Point p where
       -- |dist2 returns the squared distance between two points.
       dist2 :: p -> p -> Double
       dist2 a b = sum . map diff2 $ [0..dimension a - 1]
-        where diff2 i = (coord i a - coord i b)^(2 :: Int)
+        where diff2 i = abs (coord i a - coord i b)
 
 -- |compareDistance p a b  compares the distances of a and b to p.
 compareDistance :: (Point p) => p -> p -> p -> Ordering
@@ -44,6 +53,7 @@ data KdTree point
   = KdNode
   { kdLeft  :: KdTree point
   , kdPoint :: point
+  , kdRef   :: Int
   , kdRight :: KdTree point
   , kdAxis  :: Int
   }
@@ -52,72 +62,82 @@ data KdTree point
 
 instance Functor KdTree where
   fmap _ KdEmpty = KdEmpty
-  fmap f (KdNode l x r axis) = KdNode (fmap f l) (f x) (fmap f r) axis
+  fmap f (KdNode l x i r axis) = KdNode (fmap f l) (f x) i (fmap f r) axis
 
 instance F.Foldable KdTree where
   foldr _ init1 KdEmpty = init1
-  foldr f init1 (KdNode l x r _) = F.foldr f init3 l
+  foldr f init1 (KdNode l x _ r _) = F.foldr f init3 l
     where
       init3 = f x init2
       init2 = F.foldr f init1 r
 
-fromList :: Point p => [p] -> KdTree p
-fromList points = fromListWithDepth points 0
+fromVector :: (G.Vector v p, G.Vector v (Int, p), Point p)=> v p -> KdTree p
+fromVector points = fromVectorWithDepth (G.imap (,) points) 0
 
 -- |fromListWithDepth selects an axis based on depth so that the axis cycles
 -- through all valid values.
-fromListWithDepth :: Point p => [p] -> Int -> KdTree p
-fromListWithDepth [] _ = KdEmpty
-fromListWithDepth points depth = node
+fromVectorWithDepth :: (G.Vector v (Int, p), Point p)=> v (Int, p) -> Int -> KdTree p
+fromVectorWithDepth points depth
+  | G.null points = KdEmpty
+  | otherwise = node
   where
-    axis = depth `mod` dimension (head points)
+    axis = depth `mod` dimension (snd $ G.head points)
 
     -- Sort point list and choose median as pivot element
-    sortedPoints = L.sortBy (\a b -> coord axis a `compare` coord axis b) points
-    medianIndex = length sortedPoints `div` 2
+    sortedPoints = sortByAxis axis points
+    medianIndex  = G.length sortedPoints `div` 2
 
+    left   = G.take medianIndex       sortedPoints
+    right  = G.drop (medianIndex + 1) sortedPoints
+    (i, p) = sortedPoints G.! medianIndex
     -- Create node and construct subtrees
-    node = KdNode { kdLeft  = fromListWithDepth (take medianIndex sortedPoints) (depth+1),
-                    kdPoint = sortedPoints !! medianIndex,
-                    kdRight = fromListWithDepth (drop (medianIndex+1) sortedPoints) (depth+1),
-                    kdAxis  = axis }
+    node = KdNode { kdLeft  = fromVectorWithDepth left (depth + 1)
+                  , kdPoint = p
+                  , kdRef   = i
+                  , kdRight = fromVectorWithDepth right (depth + 1)
+                  , kdAxis  = axis }
 
-toList :: KdTree p -> [p]
-toList t = F.foldr (:) [] t
+sortByAxis :: (G.Vector v (Int, p), Point p)=> Int -> v (Int, p) -> v (Int, p)
+sortByAxis axis v = runST $ do
+  m <- G.unsafeThaw v
+  sortBy (compare `on` (coord axis . snd)) m
+  G.unsafeFreeze m
 
 -- |subtrees t returns a list containing t and all its subtrees, including the
 -- empty leaf nodes.
 subtrees :: KdTree p -> [KdTree p]
 subtrees KdEmpty = [KdEmpty]
-subtrees t@(KdNode l _ r _) = subtrees l ++ [t] ++ subtrees r
+subtrees t@(KdNode l _ _ r _) = subtrees l ++ [t] ++ subtrees r
 
 -- |nearestNeighbor tree p returns the nearest neighbor of p in tree.
-nearestNeighbor :: Point p => KdTree p -> p -> Maybe p
+nearestNeighbor :: Point p => KdTree p -> p -> Maybe (Int, p)
 nearestNeighbor KdEmpty _ = Nothing
-nearestNeighbor (KdNode KdEmpty p KdEmpty _) _ = Just p
-nearestNeighbor (KdNode l p r axis) probe
+nearestNeighbor (KdNode KdEmpty p i KdEmpty _) _ = Just (i, p)
+nearestNeighbor (KdNode l p i r axis) probe
   | xProbe <= xp = findNearest l r
   | otherwise    = findNearest r l
   where
     xProbe = coord axis probe
     xp     = coord axis p
+    d      = dist2 p probe
     findNearest tree1 tree2 = let
       candidates1 = case nearestNeighbor tree1 probe of
-        Nothing    -> [p]
-        Just best1 -> [best1, p]
-      sphereIntersectsPlane = (xProbe - xp)^(2 :: Int) <= dist2 probe p
+        Nothing    -> [(i, p)]
+        Just best1 -> [best1, (i, p)]
+      sphereIntersectsPlane = (abs $ xProbe - xp) <= d
       candidates2
         | sphereIntersectsPlane = candidates1 ++ maybeToList (nearestNeighbor tree2 probe)
         | otherwise = candidates1
-      in Just . L.minimumBy (compareDistance probe) $ candidates2
+      in Just . L.minimumBy (compareDistance probe `on` snd) $ candidates2
 
 -- |nearNeighbors tree p returns all neighbors within distance r from p in tree.
-nearNeighbors :: Point p => KdTree p -> Double -> p -> [p]
+nearNeighbors :: Point p => KdTree p -> Double -> p -> [(Int, p, Double)]
 nearNeighbors KdEmpty _ _ = []
-nearNeighbors (KdNode KdEmpty p KdEmpty _) radius probe
-  | dist2 p probe <= radius^(2 :: Int) = trace "%" [p]
-  | otherwise = []
-nearNeighbors (KdNode l p r axis) radius probe
+nearNeighbors (KdNode KdEmpty p i KdEmpty _) radius probe
+  | d <= radius = [(i, p, d)]
+  | otherwise   = []
+  where d = dist2 p probe
+nearNeighbors (KdNode l p i r axis) radius probe
   | xProbe <= xp = let
       nearest = maybePivot ++ nearNeighbors l radius probe
       in if xProbe + abs radius > xp
@@ -131,43 +151,8 @@ nearNeighbors (KdNode l p r axis) radius probe
   where
     xProbe     = coord axis probe
     xp         = coord axis p
-    maybePivot = trace "%" $ if dist2 probe p <= radius^(2 :: Int) then [p] else []
-
--- |kNearestNeighbors tree k p returns the k closest points to p within tree.
-kNearestNeighbors :: (Eq p, Point p) => KdTree p -> Int -> p -> [p]
-kNearestNeighbors KdEmpty _ _ = []
-kNearestNeighbors tree k probe
-  | k <= 0    = []
-  | otherwise = nearest : kNearestNeighbors tree' (k-1) probe
-  where
-    nearest = fromJust $ nearestNeighbor tree probe
-    tree' = tree `remove` nearest
-
--- |isValid tells whether the K-D tree property holds for a given tree.
--- Specifically, it tests that all points in the left subtree lie to the left
--- of the plane, p is on the plane, and all points in the right subtree lie to
--- the right.
-isValid :: Point p => KdTree p -> Bool
-isValid KdEmpty = True
-isValid (KdNode l p r axis) = leftIsGood && rightIsGood
-    where x = coord axis p
-          leftIsGood = all ((<= x) . coord axis) (toList l)
-          rightIsGood = all ((>= x) . coord axis) (toList r)
-
--- |allSubtreesAreValid tells whether the K-D tree property holds for the given
--- tree and all subtrees.
-allSubtreesAreValid :: Point p => KdTree p -> Bool
-allSubtreesAreValid = all isValid . subtrees
-
--- |remove t p removes the point p from t.
-remove :: (Eq p, Point p) => KdTree p -> p -> KdTree p
-remove KdEmpty _ = KdEmpty
-remove (KdNode l p r axis) pKill =
-    if p == pKill
-        then fromListWithDepth (toList l ++ toList r) axis
-        else if coord axis pKill <= coord axis p
-                then KdNode (remove l pKill) p r axis
-                else KdNode l p (remove r pKill) axis
+    d          = dist2 probe p
+    maybePivot = if d <= radius then [(i, p, d)] else []
 
 instance Arbitrary Point3d where
     arbitrary = do
