@@ -70,6 +70,10 @@ subtrees :: VpTree p -> [VpTree p]
 subtrees VpEmpty = [VpEmpty]
 subtrees t@(VpNode ib ob _ _ _) = subtrees ib ++ [t] ++ subtrees ob
 
+toList :: VpTree p -> [(Int, p)]
+toList VpEmpty = []
+toList (VpNode ib ob vp ix _) = (ix, vp) : (toList ib ++ toList ob)
+
 -- | Finds all near neighbors within r distance of the tree.
 nearNeighbors :: Metric p => VpTree p -> Double -> p -> [(Int, p, Double)]
 nearNeighbors VpEmpty _ _ = []
@@ -78,13 +82,15 @@ nearNeighbors (VpNode VpEmpty VpEmpty vp ix _) radius q
   | otherwise   = []
   where d = dist vp q
 nearNeighbors (VpNode ib ob vp ix mu) radius q
+  | getAll        = maybePivot (map (\(j, t) -> (j, t, dist vp t)) $ toList ib)
   | goIn && goOut = maybePivot (nearNeighbors ib radius q ++ nearNeighbors ob radius q)
   | goIn          = maybePivot (nearNeighbors ib radius q)
   | otherwise     = maybePivot (nearNeighbors ob radius q)
   where
-    d     = dist q vp
-    goOut = d >= mu - radius
-    goIn  = d <  mu + radius
+    d      = dist q vp
+    goOut  = d + radius >= mu
+    goIn   = d - radius <= mu
+    getAll = d + mu     <= radius
     maybePivot xs = if d <= radius then (ix, vp, d) : xs else xs
 
 -- | Finds the nearest neighbor point in the tree.
