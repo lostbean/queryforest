@@ -19,20 +19,20 @@ import Test.QuickCheck
 import Debug.Trace
 
 class Point p where
-      -- |dimension returns the number of coordinates of a point.
+      -- | dimension returns the number of coordinates of a point.
       dimension :: p -> Int
 
-      -- |coord gets the k'th coordinate, starting from 0.
+      -- | coord gets the k'th coordinate, starting from 0.
       coord :: Int -> p -> Double
 
-      -- |dist2 returns the squared distance between two points.
-      dist2 :: p -> p -> Double
-      dist2 a b = sum . map diff2 $ [0..dimension a - 1]
+      -- | dist returns the squared distance between two points.
+      dist :: p -> p -> Double
+      dist a b = sum . map diff2 $ [0..dimension a - 1]
         where diff2 i = abs (coord i a - coord i b)
 
 -- |compareDistance p a b  compares the distances of a and b to p.
 compareDistance :: (Point p) => p -> p -> p -> Ordering
-compareDistance p a b = dist2 p a `compare` dist2 p b
+compareDistance p a b = dist p a `compare` dist p b
 
 data Point3d
   = Point3d
@@ -119,7 +119,7 @@ nearestNeighbor (KdNode l p i r axis) probe
   where
     xProbe = coord axis probe
     xp     = coord axis p
-    d      = dist2 p probe
+    d      = dist p probe
     findNearest tree1 tree2 = let
       candidates1 = case nearestNeighbor tree1 probe of
         Nothing    -> [(i, p)]
@@ -136,7 +136,7 @@ nearNeighbors KdEmpty _ _ = []
 nearNeighbors (KdNode KdEmpty p i KdEmpty _) radius probe
   | d <= radius = [(i, p, d)]
   | otherwise   = []
-  where d = dist2 p probe
+  where d = dist p probe
 nearNeighbors (KdNode l p i r axis) radius probe
   | xProbe <= xp = let
       nearest = maybePivot ++ nearNeighbors l radius probe
@@ -151,7 +151,7 @@ nearNeighbors (KdNode l p i r axis) radius probe
   where
     xProbe     = coord axis probe
     xp         = coord axis p
-    d          = dist2 probe p
+    d          = dist probe p
     maybePivot = if d <= radius then [(i, p, d)] else []
 
 instance Arbitrary Point3d where

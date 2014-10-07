@@ -15,6 +15,8 @@ import qualified Data.Vector.Generic.Mutable as M
 
 import           System.Random
 
+import Debug.Trace
+
 class Metric p where
   -- | Returns the distance between two points in the metric space.
   dist :: p -> p -> Double
