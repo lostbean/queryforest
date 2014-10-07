@@ -12,6 +12,8 @@ import System.Random
 import qualified KdTree as KD
 import qualified VpTree as VP
 
+import Data.Time.Clock
+
 instance KD.Point Vec3 where
   dimension _ = 3
   coord c (Vec3 x y z)
@@ -72,7 +74,7 @@ testVP = do
   let
     --rs = [Vec3 x 0 0 | x <- let x = tan (pi/8) in [-x, 0.01-x .. x]]
     t = Vec3 (tan (pi/8) - 0.015) 0 0
-    d = (10.1*pi/180)
+    d = (5.1*pi/180)
 
     vp = VP.fromVector rs
     Just nvp@(ivp,_,_) = VP.nearestNeighbor vp t
@@ -105,3 +107,27 @@ testVP = do
   putStrLn "========== Checking =========="
   if (not $ U.null bfos) then putStrLn ("check nearest: " ++ show (ivp == ibfs)) else return ()
   putStrLn $ "check nears: " ++ show (bflists == vplist)
+
+  putStrLn "========== Performance =========="
+  let nsample =  10000
+  ps <- fmap (U.fromList . take nsample) getFRFZ
+
+  ta0 <- getCurrentTime
+  putStr $ "Sampling with brutal force " ++ show nsample ++ " rotations. Total points: "
+  let func p = U.filter ((< d) . distNoSymm p . snd) (U.imap (,) rs)
+  putStrLn $ show $ U.sum $ U.map (U.length . func) ps
+  ta1 <- getCurrentTime
+  putStrLn $ "Calculation time: " ++ show (diffUTCTime ta1 ta0)
+
+  tb0 <- getCurrentTime
+  putStr $ "Sampling with VP tree " ++ show nsample ++ " rotations. Total points: "
+  putStrLn $ show $ U.sum $ U.map (length . VP.nearNeighbors vp d) ps
+  tb1 <- getCurrentTime
+  putStrLn $ "Calculation time: " ++ show (diffUTCTime tb1 tb0)
+
+  tc0 <- getCurrentTime
+  putStr $ "Searching nearest point in VP tree"
+  [p1] <- fmap (take 1) getFRFZ
+  putStrLn $ show $ VP.nearestNeighbor vp (p1)
+  tc1 <- getCurrentTime
+  putStrLn $ "Calculation time: " ++ show (diffUTCTime tc1 tc0)

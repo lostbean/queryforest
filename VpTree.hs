@@ -78,14 +78,14 @@ nearNeighbors (VpNode VpEmpty VpEmpty vp ix _) radius q
   | otherwise   = []
   where d = dist vp q
 nearNeighbors (VpNode ib ob vp ix mu) radius q
-  | goIn && goOut = maybePivot ++ nearNeighbors ib radius q ++ nearNeighbors ob radius q
-  | goIn          = maybePivot ++ nearNeighbors ib radius q
-  | otherwise     = maybePivot ++ nearNeighbors ob radius q
+  | goIn && goOut = maybePivot (nearNeighbors ib radius q ++ nearNeighbors ob radius q)
+  | goIn          = maybePivot (nearNeighbors ib radius q)
+  | otherwise     = maybePivot (nearNeighbors ob radius q)
   where
     d     = dist q vp
     goOut = d >= mu - radius
     goIn  = d <  mu + radius
-    maybePivot = if d <= radius then [(ix, vp, d)] else []
+    maybePivot xs = if d <= radius then (ix, vp, d) : xs else xs
 
 -- | Finds the nearest neighbor point in the tree.
 nearestNeighbor :: Metric p => VpTree p -> p -> Maybe (Int, p, Double)
