@@ -1,19 +1,20 @@
 {-# LANGUAGE BangPatterns     #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module VpTree
+module Data.VPtree
        ( Metric (..)
        , VpTree
        , fromVector
        , subtrees
        , nearNeighbors
        , nearestNeighbor
-       )where
+       ) where
 
-import qualified Data.Vector.Generic         as G
-import qualified Data.Vector.Generic.Mutable as M
+import qualified Data.Vector.Generic as G
 
 import           System.Random
+
+import           Data.TreeTools
 
 import Debug.Trace
 
@@ -26,8 +27,8 @@ data VpTree point
   { vpInBranch  :: VpTree point
   , vpOutBranch :: VpTree point
   , vpPoint     :: point
-  , vpRef       :: Int
-  , vpMu        :: Double
+  , vpRef       :: {-# UNPACK #-} !Int
+  , vpMu        :: {-# UNPACK #-} !Double
   }
   | VpEmpty
   deriving (Eq, Ord, Show)
@@ -42,17 +43,11 @@ fromVector' gen points
   | G.null points = VpEmpty
   | otherwise     = node
   where
-    npoints = G.length points
-    ivp = fst $ randomR (0, npoints - 1) gen
+    ((ix, vp), ps) = popAt (G.length points - 1) points
+    -- ((ix, vp), ps) = popRandom gen points
+    ds = G.map (\(i, q) -> (i, q, dist vp q)) ps
 
-    ((ix, vp), ps) = popAt ivp points
-    ds  = G.map (\(i, q) -> (i, q, dist vp q)) ps
-
-    median
-      | nds > 0   = (G.foldl' (\acc (_,_,d) -> acc + d) 0 ds) / (fromIntegral nds)
-      | otherwise = 0
-      where nds = G.length ds
-    (outb, inb) = G.unstablePartition (\(_,_,d) -> (d > median)) ds
+    (inb, outb, median) = cutMedian ds
     -- Create node and construct subtrees
     node = VpNode { vpInBranch  = fromVector' gen (G.map (\(i,q,_) -> (i,q)) inb)
                   , vpOutBranch = fromVector' gen (G.map (\(i,q,_) -> (i,q)) outb)
@@ -60,9 +55,6 @@ fromVector' gen points
                   , vpRef       = ix
                   , vpMu        = median
                   }
-
-popAt :: (M.MVector (G.Mutable v) a, G.Vector v a)=> Int -> v a -> (a, v a)
-popAt i = (\v -> (G.head v, G.tail v)) . G.modify (\m -> M.swap m 0 i)
 
 -- | Subtrees t returns a list containing t and all its subtrees, including the
 -- empty leaf nodes.
@@ -82,35 +74,45 @@ nearNeighbors (VpNode VpEmpty VpEmpty vp ix _) radius q
   | otherwise   = []
   where d = dist vp q
 nearNeighbors (VpNode ib ob vp ix mu) radius q
-  | getAll        = maybePivot (map (\(j, t) -> (j, t, dist vp t)) $ toList ib)
-  | goIn && goOut = maybePivot (nearNeighbors ib radius q ++ nearNeighbors ob radius q)
-  | goIn          = maybePivot (nearNeighbors ib radius q)
-  | otherwise     = maybePivot (nearNeighbors ob radius q)
+  | isAllIn &&
+    not onlyIn = validPoint (nearNeighbors ob radius q ++ allIn)
+  | isAllIn = validPoint allIn
+  | onlyIn  = validPoint (nearNeighbors ib radius q)
+  | onlyOut = validPoint (nearNeighbors ob radius q)
+  | both    = validPoint (nearNeighbors ib radius q ++ nearNeighbors ob radius q)
+  | otherwise = validPoint []
   where
-    d      = dist q vp
-    goOut  = d + radius >= mu
-    goIn   = d - radius <= mu
-    getAll = d + mu     <= radius
-    maybePivot xs = if d <= radius then (ix, vp, d) : xs else xs
+    d       = dist q vp
+    onlyOut = mu + radius < d
+    onlyIn  = mu - radius > d
+    both    = mu - radius <= d && d <= mu + radius
+    isAllIn = d < radius - mu
+    allIn   = map (\(j, t) -> (j, t, dist q t)) (toList ib )
+    validPoint xs = if d <= radius then (ix, vp, d) : xs else xs
 
 -- | Finds the nearest neighbor point in the tree.
 nearestNeighbor :: Metric p => VpTree p -> p -> Maybe (Int, p, Double)
-nearestNeighbor = getWithRadius (1/0) -- Trick Infinity
+nearestNeighbor VpEmpty _ = Nothing
+nearestNeighbor n q = getWithRadius (dist q (vpPoint n)) n q
 
 getWithRadius :: (Metric p)=> Double -> VpTree p -> p -> Maybe (Int, p, Double)
 getWithRadius _ VpEmpty _ = Nothing
 getWithRadius _  (VpNode VpEmpty VpEmpty vp ix _) q = Just (ix, vp, dist vp q)
 getWithRadius r0 (VpNode ib ob vp ix mu) q
-  | goIn && goOut = getSmallest (getWithRadius r1 ib q) (getWithRadius r1 ob q)
-  | goIn          = getSmallest (getWithRadius r1 ib q) Nothing
-  | otherwise     = getSmallest Nothing                 (getWithRadius r1 ob q)
+  | goBoth &&
+    d < mu    = getSmallest2 (\r -> getWithRadius r ib q) (\r -> getWithRadius r ob q) std
+  | goBoth    = getSmallest2 (\r -> getWithRadius r ob q) (\r -> getWithRadius r ib q) std
+  | goIn      = getSmallest  (\r -> getWithRadius r ib q) std
+  | otherwise = getSmallest  (\r -> getWithRadius r ob q) std
   where
-    d     = dist q vp
-    goOut = d >= mu - r1
-    goIn  = d <  mu + r1
-    r1 = if d <= r0 then d else r0
-    compNode a@(_, _, ra) b@(_, _, rb) = if ra <= rb then a else b
-    getSmallest (Just x) (Just y) = Just $ compNode x $ compNode y (ix, vp, d)
-    getSmallest (Just x) _        = Just $ compNode x (ix, vp, d)
-    getSmallest _        (Just y) = Just $ compNode y (ix, vp, d)
-    getSmallest _        _        = Nothing
+    d      = dist q vp
+    r1     = if d <= r0 then d else r0
+    std    = (ix, vp, d)
+    goOut  = d >= mu - r1
+    goIn   = d <= mu + r1
+    goBoth = goIn && goOut
+
+    compNode !a@(_, _, ra) !b@(_, _, rb) = if ra <= rb then a else b
+    getSmallest  f1    = Just . fuu f1
+    getSmallest2 f1 f2 = Just . fuu f2 . fuu f1
+    fuu func !x@(_, _, dx) = maybe x (compNode x) (func dx)

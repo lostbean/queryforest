@@ -1,7 +1,7 @@
 {-# LANGUAGE BangPatterns     #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module KdTree where
+module Data.KDtree where
 
 import qualified Data.Foldable       as F
 import qualified Data.List           as L
@@ -14,7 +14,6 @@ import Data.Function       (on)
 import Data.Vector.Algorithms.Intro
 import Control.Monad.ST
 import Data.Maybe
-import Test.QuickCheck
 
 import Debug.Trace
 
@@ -33,21 +32,6 @@ class Point p where
 -- |compareDistance p a b  compares the distances of a and b to p.
 compareDistance :: (Point p) => p -> p -> p -> Ordering
 compareDistance p a b = dist p a `compare` dist p b
-
-data Point3d
-  = Point3d
-  { p3x :: Double
-  , p3y :: Double
-  , p3z :: Double
-  } deriving (Eq, Ord, Show)
-
-instance Point Point3d where
-  dimension _ = 3
-
-  coord 0 p = p3x p
-  coord 1 p = p3y p
-  coord _ p = p3z p
-
 
 data KdTree point
   = KdNode
@@ -153,10 +137,3 @@ nearNeighbors (KdNode l p i r axis) radius probe
     xp         = coord axis p
     d          = dist probe p
     maybePivot = if d <= radius then [(i, p, d)] else []
-
-instance Arbitrary Point3d where
-    arbitrary = do
-        x <- arbitrary
-        y <- arbitrary
-        z <- arbitrary
-        return (Point3d x y z)
