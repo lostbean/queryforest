@@ -6,8 +6,10 @@ module Data.VPtree
        , VpTree
        , fromVector
        , subtrees
+       , toList
        , nearNeighbors
        , nearestNeighbor
+       , nearestThanNeighbor
        ) where
 
 import qualified Data.Vector.Generic as G
@@ -91,19 +93,23 @@ nearNeighbors (VpNode ib ob vp ix mu) radius q
     validPoint xs = if d <= radius then (ix, vp, d) : xs else xs
 
 -- | Finds the nearest neighbor point in the tree.
+nearestThanNeighbor :: Metric p => VpTree p -> Double -> p -> Maybe (Int, p, Double)
+nearestThanNeighbor = getWithRadius
+
+-- | Finds the nearest neighbor point in the tree.
 nearestNeighbor :: Metric p => VpTree p -> p -> Maybe (Int, p, Double)
 nearestNeighbor VpEmpty _ = Nothing
-nearestNeighbor n q = getWithRadius (dist q (vpPoint n)) n q
+nearestNeighbor n q = getWithRadius n (dist q (vpPoint n)) q
 
-getWithRadius :: (Metric p)=> Double -> VpTree p -> p -> Maybe (Int, p, Double)
-getWithRadius _ VpEmpty _ = Nothing
-getWithRadius _  (VpNode VpEmpty VpEmpty vp ix _) q = Just (ix, vp, dist vp q)
-getWithRadius r0 (VpNode ib ob vp ix mu) q
+getWithRadius :: (Metric p)=> VpTree p -> Double -> p -> Maybe (Int, p, Double)
+getWithRadius VpEmpty _ _ = Nothing
+getWithRadius (VpNode VpEmpty VpEmpty vp ix _) _ q = Just (ix, vp, dist vp q)
+getWithRadius (VpNode ib ob vp ix mu) r0 q
   | goBoth &&
-    d < mu    = getSmallest2 (\r -> getWithRadius r ib q) (\r -> getWithRadius r ob q) std
-  | goBoth    = getSmallest2 (\r -> getWithRadius r ob q) (\r -> getWithRadius r ib q) std
-  | goIn      = getSmallest  (\r -> getWithRadius r ib q) std
-  | otherwise = getSmallest  (\r -> getWithRadius r ob q) std
+    d < mu    = getSmallest2 (\r -> getWithRadius ib r q) (\r -> getWithRadius ob r q) std
+  | goBoth    = getSmallest2 (\r -> getWithRadius ob r q) (\r -> getWithRadius ib r q) std
+  | goIn      = getSmallest  (\r -> getWithRadius ib r q) std
+  | otherwise = getSmallest  (\r -> getWithRadius ob r q) std
   where
     d      = dist q vp
     r1     = if d <= r0 then d else r0

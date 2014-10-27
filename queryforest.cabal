@@ -49,6 +49,7 @@ library
   exposed-modules:  Data.KDtree
                     Data.VPtree
                     Data.MVPtree
+                    Data.BlazeVPtree
   other-modules:    Data.TreeTools
   -- other-extensions:
   build-depends:       base   >= 4.7  && < 4.8
