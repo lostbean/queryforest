@@ -7,6 +7,7 @@ module Data.VPtree
        , fromVector
        , subtrees
        , toList
+       , flatTree
        , nearNeighbors
        , nearestNeighbor
        , nearestThanNeighbor
@@ -67,6 +68,10 @@ subtrees t@(VpNode ib ob _ _ _) = subtrees ib ++ [t] ++ subtrees ob
 toList :: VpTree p -> [(Int, p)]
 toList VpEmpty = []
 toList (VpNode ib ob vp ix _) = (ix, vp) : (toList ib ++ toList ob)
+
+flatTree :: VpTree p -> [(Int, p, Double)]
+flatTree VpEmpty = []
+flatTree (VpNode ib ob vp ix d) = flatTree ib ++ [(ix, vp, d)] ++ flatTree ob
 
 -- | Finds all near neighbors within r distance of the tree.
 nearNeighbors :: Metric p => VpTree p -> Double -> p -> [(Int, p, Double)]

@@ -12,15 +12,13 @@ module Data.BlazeVPtree
        ) where
 
 import qualified Data.Vector.Unboxed         as U
-import qualified Data.Vector.Generic         as G
 import qualified Data.Vector.Generic.Mutable as M
 
 import           Data.Function  (on)
 
 import           Control.Monad.ST
---import           Control.Monad.Primitive
+import           Control.Monad
 import           Data.Vector.Algorithms.Intro
-import           System.Random
 
 
 import Debug.Trace
@@ -36,51 +34,59 @@ data VPtree point
 
 fromVector :: (U.Unbox a, Metric a)=> U.Vector a -> VPtree a
 fromVector v = VPtree $ runST $ do
-  mv <- U.thaw (U.imap (\i p -> (i,p,0)) v)
+  mv <- U.thaw (U.imap (\i p -> (i,p, fromIntegral i)) v)
   go mv (0, n-1)
   U.freeze mv
   where
     n = U.length v
     go mv range = do
-      x <- cutMedian mv range
+      x <- mkBranch mv range
       maybe (return ()) (\(rangeIn, rangeOut) -> go mv rangeIn >> go mv rangeOut) x
 
-cutMedian mv (il, iu)
+
+mkBranch :: (Metric p, U.Unbox p)=> U.MVector s (Int, p, Double)
+         -> (Int, Int) -> ST s (Maybe ((Int, Int), (Int, Int)))
+mkBranch mv (il, iu)
   | il >  iu = return Nothing
   | il == iu = do
       (ip, p, _) <- M.read mv iu
       M.write mv iu (ip, p, 0)
       return Nothing
   | iu - il == 1 = do
-      (ivp, vp, _) <- M.read mv iu
-      (ip, p, _)   <- M.read mv il
-      M.write mv iu (ivp, vp, dist p vp)
-      M.write mv il (ip, p, 0)
+      -- place farthest point at the lower index
+      (_,_,dl) <- M.read mv il
+      (_,_,du) <- M.read mv iu
+      if dl < du then M.swap mv il iu else return ()
+      -- calculate VP on the lower index because div (i+(i+1)) 2 = i
+      -- therefore the sub-tree range (i, i+1) will always have i as VP
+      (ip,  p,  _) <- M.read mv iu
+      (ivp, vp, _) <- M.read mv il
+      M.write mv iu (ip,  p,  0        )
+      M.write mv il (ivp, vp, dist vp p)
       return Nothing
   | otherwise = do
-
-      M.swap mv il iu
+      -- find farthest index
+      (_,_,d0) <- M.read mv il
+      let foo p@(acc, _) t = fmap (\(_,_,d) -> if d > acc then (d, t) else p) (M.read mv t)
+      (_,imax) <- foldM foo (d0, il) [il + 1 .. iu]
+      -- use farthest index as VP point and put at the begin
+      M.swap mv imax il
+      -- calculate distances from VP
       (ix, vp, _) <- M.read mv il
       let func i = do
             (ip, p, _) <- M.read mv i
             M.write mv i (ip, p, dist p vp)
       mapM_ func [il+1 .. iu]
-
-      let sm = M.unsafeSlice (il+1) (iu - il) mv
-      sortBy (compare `on` (\(_,_,d) -> d)) sm
-
+      -- sort according to the distance to VP point
+      sortByBounds (compare `on` (\(_,_,d) -> d)) mv (il+1) (iu+1)
+      -- cut at the median distance
       let mid = (il + iu) `quot` 2
-      (_, _, dl) <- M.read mv mid
-      (_, _, du) <- M.read mv (mid+1)
-
-      -- place pivot on center
+      (_, _, median) <- M.read mv mid
+      -- on space on the middle and place VP point
       M.swap mv il mid
-
-      let median = 0.5 * (du + dl)
       M.write mv mid (ix, vp, median)
-
+      -- return branch's ranges
       return $ Just ((il, mid-1), (mid+1, iu))
-
 
 -- | Finds all near neighbors within r distance of the tree.
 nearNeighbors :: (U.Unbox p, Metric p) => VPtree p -> Double -> p -> [(Int, p, Double)]
@@ -88,7 +94,6 @@ nearNeighbors (VPtree v) radius q = go (0, U.length v - 1)
   where
     go (!il, !iu)
       | il >  iu   = []
-      -- | il == iu   = validPoint []
       | isAllIn && not onlyIn = validPoint (goOut ++ allIn)
       | isAllIn    = validPoint allIn
       | onlyIn     = validPoint goIn
@@ -101,15 +106,12 @@ nearNeighbors (VPtree v) radius q = go (0, U.length v - 1)
         goIn    = go (il, mid - 1)
         goOut   = go (mid + 1, iu)
         d       = dist q vp
-        --d       = trace "#" $ dist q vp
         onlyOut = mu + radius < d
         onlyIn  = mu - radius > d
         both    = mu - radius <= d && d <= mu + radius
         isAllIn = d < radius - mu
-        --allIn   = U.toList $ U.map (\(j, t, _) -> (j, t, dist q t)) (U.unsafeSlice il (mid-il) v)
-        allIn   = map ( (\(j, t, _) -> (j, t, dist q t)). U.unsafeIndex v) [il .. mid - 1]
+        allIn   = map ((\(j, t, _) -> (j, t, dist q t)). U.unsafeIndex v) [il .. mid - 1]
         validPoint xs = if d <= radius then (ix, vp, d) : xs else xs
---("(" ++ show ix ++ ")")
 
 
 

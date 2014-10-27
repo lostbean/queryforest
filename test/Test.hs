@@ -30,16 +30,37 @@ instance BVP.Metric (Double, Double, Double) where
     in sqrt $ x*x + y*y + z*z
 
 instance VP.Metric Vec3 where
-  dist r1 r2 = len $ r1 &- r2
+  --dist r1 r2 = len $ r1 &- r2
+  dist = distSymm
 
 instance BVP.Metric Vec3 where
-  dist r1 r2 = len $ r1 &- r2
+  --dist r1 r2 = len $ r1 &- r2
+  dist = distSymm
 
 instance VP.Metric Double where
   dist r1 r2 = abs $ r1 - r2
 
 instance BVP.Metric Double where
   dist r1 r2 = abs $ r1 - r2
+
+
+-- | Distance between two rotations without any symmetry
+distNoSymm :: Vec3 -> Vec3 -> Double
+distNoSymm r1 r2 = 2 * atan (norm $ rComp r1 (neg r2))
+
+-- | Distance between two rotations regarding symmetry
+distSymm :: Vec3 -> Vec3 -> Double
+distSymm r1 r2 = minimum $ map (distNoSymm r1 . rComp r2) [zero, Vec3 1 0 0, Vec3 (-1) 0 0]
+
+-- | Compose Rodigues-Frank
+rComp :: Vec3 -> Vec3 -> Vec3
+rComp r1 r2 = (r1 &+ r2 &- (r1 &^ r2)) &* (1/(1 - r1 &. r2))
+
+-- | Generate random values of Rodrigues-Frank C4 symmetry (90 <100>, 90 <010> 90 <001>)
+-- with FZ planes at (+-45 <100>,+-45 <010>,+-45 <001>)
+getFRFZ :: IO [Vec3]
+getFRFZ = newStdGen >>= \g -> do
+  return $ zipWith (\v k -> v &* tan (k*pi/8)) (randoms g) (randomRs (0, 1) g)
 
 getD :: IO [Double]
 getD = fmap (randomRs (0, 1)) newStdGen
@@ -55,14 +76,18 @@ toVec3 = \(x,y,z) -> Vec3 x y z
 
 main :: IO ()
 main = do
-  rs <- fmap (U.fromList . take 40000) getDDD
-  t  <- fmap (U.head . U.fromList . take 1) getDDD
+  rs <- fmap (U.fromList . take 10000) getFRFZ
+  --t  <- fmap (U.head . U.fromList . take 1) getFRFZ
+  --rs <- fmap (U.fromList . take 10000) getDDD
+  --t  <- fmap (U.head . U.fromList . take 1) getDDD
   --rs <- fmap (U.map toVec3 . U.fromList . take 40000) getDDD
   --t  <- fmap (toVec3 . U.head . U.fromList . take 1) getDDD
   let
     mvp = BVP.fromVector rs
     vp  = VP.fromVector rs
-    d   = (0.01)
+    --d   = (0.01)
+    t = Vec3 (tan (pi/8) - 0.015) 0 0
+    d = (5.5*pi/180)
 
     vpo = VP.nearNeighbors vp d t
     vplist = L.sort $ map (\(i,_,_) -> i) vpo
@@ -88,10 +113,14 @@ main = do
   putStrLn "========== Checking =========="
   putStrLn $ "check nears: " ++ show (bflists == vplist)
 
+  --print $ map (\(i,_,d) -> (i, d)) $ VP.flatTree vp
+  --print $ U.map (\(i,_,d) -> (i, d)) $ BVP.vptree mvp
+
   putStrLn "========== Performance =========="
   let nsample =  10000
+  ps <- fmap (U.fromList . take nsample) getFRFZ
   --ps <- fmap (U.map toVec3 . U.fromList . take nsample) getDDD
-  ps <- fmap (U.fromList . take nsample) getDDD
+  --ps <- fmap (U.fromList . take nsample) getDDD
 
   printTime "brutal force" $ let
     func p = U.filter ((< d) . VP.dist p . snd) (U.imap (,) rs)
@@ -101,6 +130,7 @@ main = do
 
   printTime "VP tree" $ U.map (length . VP.nearNeighbors vp d) ps
 
+printTime :: (U.Unbox s, Show s, Num s)=> [Char] -> U.Vector s -> IO ()
 printTime name ps = do
   ta0 <- getCurrentTime
   putStr $ "Sampling with " ++ name ++ ". Total points: "
