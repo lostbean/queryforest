@@ -77,10 +77,12 @@ mkBranch mv (il, iu)
             (ip, p, _) <- M.read mv i
             M.write mv i (ip, p, dist p vp)
       mapM_ func [il+1 .. iu]
-      -- sort according to the distance to VP point
-      sortByBounds (compare `on` (\(_,_,d) -> d)) mv (il+1) (iu+1)
-      -- cut at the median distance
+      -- get middle length (median in sorted vector)
       let mid = (il + iu) `quot` 2
+      -- sort according to the distance to VP point
+      -- only sort half way until mid (the rest is not necessary)
+      partialSortByBounds (compare `on` (\(_,_,d) -> d)) mv (mid-il) (il+1) (iu+1)
+      -- cut at the median distance
       (_, _, median) <- M.read mv mid
       -- on space on the middle and place VP point
       M.swap mv il mid
