@@ -5,10 +5,9 @@ module Data.BlazeVPtree
        ( Metric (..)
        , VPtree (..)
        , fromVector
-       --, subtrees
        , nearNeighbors
-       --, nearestNeighbor
-       --, nearestThanNeighbor
+       , nearestNeighbor
+       , nearestThanNeighbor
        ) where
 
 import qualified Data.Vector.Unboxed         as U
@@ -20,8 +19,7 @@ import           Control.Monad.ST
 import           Control.Monad
 import           Data.Vector.Algorithms.Intro
 
-
-import Debug.Trace
+--import Debug.Trace
 
 class Metric p where
   -- | Returns the distance between two points in the metric space.
@@ -42,7 +40,6 @@ fromVector v = VPtree $ runST $ do
     go mv range = do
       x <- mkBranch mv range
       maybe (return ()) (\(rangeIn, rangeOut) -> go mv rangeIn >> go mv rangeOut) x
-
 
 mkBranch :: (Metric p, U.Unbox p)=> U.MVector s (Int, p, Double)
          -> (Int, Int) -> ST s (Maybe ((Int, Int), (Int, Int)))
@@ -115,37 +112,44 @@ nearNeighbors (VPtree v) radius q = go (0, U.length v - 1)
         allIn   = map ((\(j, t, _) -> (j, t, dist q t)). U.unsafeIndex v) [il .. mid - 1]
         validPoint xs = if d <= radius then (ix, vp, d) : xs else xs
 
-
-
-{--
 -- | Finds the nearest neighbor point in the tree.
-nearestThanNeighbor :: Metric p => VPtree p -> Double -> p -> Maybe (Int, p, Double)
+nearestThanNeighbor :: (Metric p, U.Unbox p)=> VPtree p -> Double
+                    -> p -> Maybe (Int, p, Double)
 nearestThanNeighbor = getWithRadius
 
 -- | Finds the nearest neighbor point in the tree.
-nearestNeighbor :: Metric p => VPtree p -> p -> Maybe (Int, p, Double)
-nearestNeighbor VpEmpty _ = Nothing
-nearestNeighbor n q = getWithRadius n (dist q (vpPoint n)) q
-
-getWithRadius :: (Metric p)=> VPtree p -> Double -> p -> Maybe (Int, p, Double)
-getWithRadius VpEmpty _ _ = Nothing
-getWithRadius (VpNode VpEmpty VpEmpty vp ix _) _ q = Just (ix, vp, dist vp q)
-getWithRadius (VpNode ib ob vp ix mu) r0 q
-  | goBoth &&
-    d < mu    = getSmallest2 (\r -> getWithRadius ib r q) (\r -> getWithRadius ob r q) std
-  | goBoth    = getSmallest2 (\r -> getWithRadius ob r q) (\r -> getWithRadius ib r q) std
-  | goIn      = getSmallest  (\r -> getWithRadius ib r q) std
-  | otherwise = getSmallest  (\r -> getWithRadius ob r q) std
+nearestNeighbor :: (Metric p, U.Unbox p)=> VPtree p -> p -> Maybe (Int, p, Double)
+nearestNeighbor t@(VPtree v) q
+  | U.null v  = Nothing
+  | otherwise = getWithRadius t (dist q vp) q
   where
-    d      = dist q vp
-    r1     = if d <= r0 then d else r0
-    std    = (ix, vp, d)
-    goOut  = d >= mu - r1
-    goIn   = d <= mu + r1
-    goBoth = goIn && goOut
+    (_, vp, _) = v `U.unsafeIndex` mid
+    mid        = (U.length v - 1) `quot` 2
 
+getWithRadius :: (Metric p, U.Unbox p)=> VPtree p -> Double -> p -> Maybe (Int, p, Double)
+getWithRadius (VPtree v) rinit q
+  | U.null v  = Nothing
+  | otherwise = Just $ go (0, U.length v - 1) rinit
+  where
     compNode !a@(_, _, ra) !b@(_, _, rb) = if ra <= rb then a else b
-    getSmallest  f1    = Just . fuu f1
-    getSmallest2 f1 f2 = Just . fuu f2 . fuu f1
-    fuu func !x@(_, _, dx) = maybe x (compNode x) (func dx)
---}
+    go (!il, !iu) !r0
+      | il >= iu  = std
+      | both &&
+        d < mu    = compNode (compNode goIn  goOut) std
+      | both      = compNode (compNode goOut goIn ) std
+      | onlyIn    = compNode goIn  std
+      | onlyOut   = compNode goOut std
+      | otherwise = std
+      where
+        (ix, vp, mu) = v `U.unsafeIndex` mid
+        mid     = (il + iu) `quot` 2
+        d       = dist q vp
+        r1      = if d <= r0 then d else r0
+        std     = (ix, vp, d)
+
+        goIn    = go (il, mid - 1) r1
+        goOut   = go (mid + 1, iu) r1
+
+        onlyOut = mu + r1 < d
+        onlyIn  = mu - r1 > d
+        both    = mu - r1 <= d && d <= mu + r1
