@@ -109,15 +109,21 @@ nearNeighbors (VPtree v) radius q = go (0, U.length v - 1)
         onlyIn  = mu - radius > d
         both    = mu - radius <= d && d <= mu + radius
         isAllIn = d < radius - mu
-        allIn   = map ((\(j, t, _) -> (j, t, dist q t)). U.unsafeIndex v) [il .. mid - 1]
+        allIn   = map ((\(j, t, _) -> (j, t, dist q t)) . U.unsafeIndex v) [il .. mid - 1]
         validPoint xs = if d <= radius then (ix, vp, d) : xs else xs
 
--- | Finds the nearest neighbor point in the tree.
+-- | Finds the nearest neighbor point in the tree. Uses starting radius to speed up the
+-- searching. This value should be largest neighbor distance which can be easily determined
+-- in a grid like structure. Larger values slow down the search and smaller values might not
+-- return the closest neighbor (although most of the time it returns the right value, even
+-- when start radius is set to 0).
 nearestThanNeighbor :: (Metric p, U.Unbox p)=> VPtree p -> Double
                     -> p -> Maybe (Int, p, Double)
 nearestThanNeighbor = getWithRadius
 
--- | Finds the nearest neighbor point in the tree.
+-- | Finds the nearest neighbor point in the tree without using start radius. It will,
+-- probably, be slower than 'nearestThanNeighbor' but it will always return the closest
+-- point.
 nearestNeighbor :: (Metric p, U.Unbox p)=> VPtree p -> p -> Maybe (Int, p, Double)
 nearestNeighbor t@(VPtree v) q
   | U.null v  = Nothing
@@ -132,14 +138,17 @@ getWithRadius (VPtree v) rinit q
   | otherwise = Just $ go (0, U.length v - 1) rinit
   where
     compNode !a@(_, _, ra) !b@(_, _, rb) = if ra <= rb then a else b
+    compNodeWith func !a@(_, _, ra) = let
+      !b@(_, _, rb) = func ra
+      in if ra <= rb then a else b
     go (!il, !iu) !r0
-      | il >= iu  = std
-      | both &&
-        d < mu    = compNode (compNode goIn  goOut) std
-      | both      = compNode (compNode goOut goIn ) std
-      | onlyIn    = compNode goIn  std
-      | onlyOut   = compNode goOut std
-      | otherwise = std
+      | il >= iu       = std
+      -- When searching both branches, go to the closest branch first
+      | both && d < mu = compNodeWith goOut (compNode (goIn  r1) std)
+      | both           = compNodeWith goIn  (compNode (goOut r1) std)
+      | onlyIn         = compNode (goIn  r1) std
+      | onlyOut        = compNode (goOut r1) std
+      | otherwise      = std
       where
         (ix, vp, mu) = v `U.unsafeIndex` mid
         mid     = (il + iu) `quot` 2
@@ -147,8 +156,8 @@ getWithRadius (VPtree v) rinit q
         r1      = if d <= r0 then d else r0
         std     = (ix, vp, d)
 
-        goIn    = go (il, mid - 1) r1
-        goOut   = go (mid + 1, iu) r1
+        goIn    = go (il, mid - 1)
+        goOut   = go (mid + 1, iu)
 
         onlyOut = mu + r1 < d
         onlyIn  = mu - r1 > d

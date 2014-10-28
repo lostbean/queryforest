@@ -118,9 +118,6 @@ main = do
   putStrLn "========== Checking =========="
   putStrLn $ "check nears: " ++ show (bflist == vplist)
 
-  --print $ map (\(i,_,d) -> (i, d)) $ VP.flatTree vp
-  --print $ U.map (\(i,_,d) -> (i, d)) $ BVP.vptree mvp
-
   putStrLn "========== Performance =========="
   let nsample =  10000
   --ps <- fmap (U.fromList . take nsample) getFRFZ
@@ -135,7 +132,9 @@ main = do
 
   printTime "VP tree" $ U.map (length . VP.nearNeighbors vp d) ps
 
-  printTime "VP nst" $ U.map ((\(Just (i,_,_)) -> i) . BVP.nearestThanNeighbor mvp (d/2)) ps
+  printTime "BlazeVP nst" $ U.map ((\(Just (i,_,_)) -> i) . BVP.nearestNeighbor mvp) ps
+  printTime "BlazeVP nst with 0 start" $ U.map ((\(Just (i,_,_)) -> i) . BVP.nearestThanNeighbor mvp 0) ps
+
 
 printTime :: (U.Unbox s, Show s, Num s)=> [Char] -> U.Vector s -> IO ()
 printTime name ps = do
