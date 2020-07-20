@@ -26,12 +26,9 @@ Test-Suite test
   ghc-options:
                     -Wall
                     -O2
-                    -rtsopts
                     -funbox-strict-fields
-                    -fprof-auto
-                    -threaded
-                    -auto-all
-                    -caf-all
+                    -fprof-auto-exported
+                    -fprof-cafs
 
 Benchmark bench
   type:             exitcode-stdio-1.0
@@ -48,10 +45,9 @@ Benchmark bench
                     -O2
                     -rtsopts
                     -funbox-strict-fields
-                    -fprof-auto
                     -threaded
-                    -auto-all
-                    -caf-all
+                    -fprof-auto-exported
+                    -fprof-cafs
 
 library
   exposed-modules:  Data.KDtree
@@ -73,5 +69,5 @@ library
                     -rtsopts
                     -funbox-strict-fields
                     -threaded
-                    -auto-all
-                    -caf-all
+                    -fprof-auto-exported
+                    -fprof-cafs
