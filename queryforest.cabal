@@ -3,7 +3,7 @@ version:       0.1.0.0
 synopsis:      Query trees for metric space
 
 -- description:
-license:       AllRightsReserved
+license:       MIT
 license-file:  LICENSE
 author:        lostbean
 maintainer:    talktoedgar@gmail.com
