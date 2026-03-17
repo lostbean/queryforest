@@ -22,8 +22,6 @@ import System.Random
 
 import Data.TreeTools
 
-import Debug.Trace
-
 class Metric p where
     -- | Returns the distance between two points in the metric space.
     dist :: p -> p -> Double

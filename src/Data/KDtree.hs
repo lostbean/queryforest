@@ -6,16 +6,12 @@ module Data.KDtree where
 import qualified Data.Foldable as F
 import qualified Data.List as L
 import qualified Data.Vector.Generic as G
-import qualified Data.Vector.Unboxed as U
 
 import Data.Function (on)
-import Data.Vector.Unboxed (Vector)
 
 import Control.Monad.ST
 import Data.Maybe
 import Data.Vector.Algorithms.Intro
-
-import Debug.Trace
 
 class Point p where
     -- | dimension returns the number of coordinates of a point.
