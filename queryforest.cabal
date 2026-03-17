@@ -1,77 +1,69 @@
-name:                queryforest
-version:             0.1.0.0
-synopsis:            Query trees for metric space
+name:          queryforest
+version:       0.1.0.0
+synopsis:      Query trees for metric space
+
 -- description:
-license:             AllRightsReserved
-license-file:        LICENSE
-author:              lostbean
-maintainer:          talktoedgar@gmail.com
-category:            Data
-build-type:          Simple
-cabal-version:       >=1.10
+license:       AllRightsReserved
+license-file:  LICENSE
+author:        lostbean
+maintainer:    talktoedgar@gmail.com
+category:      Data
+build-type:    Simple
+cabal-version: >=1.10
 
-Flag test
-    Description:        Build the exectable using command line.
-    Default:            False
+flag test
+  description: Build the exectable using command line.
+  default:     False
 
-Test-Suite test
+test-suite test
   type:             exitcode-stdio-1.0
   main-is:          Test.hs
   default-language: Haskell2010
-  build-depends:    queryforest
-                    , base   >=4.7 && <4.9
-                    , random >=1.1
-                    , vector >=0.10
+  build-depends:
+      base         >=4.7  && <4.9
+    , queryforest
+    , random       >=1.1
+    , vector       >=0.10
+
   hs-source-dirs:   test
   ghc-options:
-                    -Wall
-                    -O2
-                    -rtsopts
-                    -funbox-strict-fields
-                    -fprof-auto
-                    -threaded
-                    -auto-all
-                    -caf-all
+    -Wall -O2 -rtsopts -funbox-strict-fields -fprof-auto -threaded
+    -auto-all -caf-all
 
-Benchmark bench
+benchmark bench
   type:             exitcode-stdio-1.0
   main-is:          Bench.hs
   default-language: Haskell2010
-  build-depends:    queryforest
-                    , base   >=4.7 && <4.9
-                    , random >=1.1
-                    , vector >=0.10
-                    , time   >= 1.4
+  build-depends:
+      base         >=4.7  && <4.9
+    , queryforest
+    , random       >=1.1
+    , time         >=1.4
+    , vector       >=0.10
+
   hs-source-dirs:   test
   ghc-options:
-                    -Wall
-                    -O2
-                    -rtsopts
-                    -funbox-strict-fields
-                    -fprof-auto
-                    -threaded
-                    -auto-all
-                    -caf-all
+    -Wall -O2 -rtsopts -funbox-strict-fields -fprof-auto -threaded
+    -auto-all -caf-all
 
 library
-  exposed-modules:  Data.KDtree
-                    Data.VPtree
-                    Data.MVPtree
-                    Data.BlazeVPtree
+  exposed-modules:
+    Data.BlazeVPtree
+    Data.KDtree
+    Data.MVPtree
+    Data.VPtree
+
   other-modules:    Data.TreeTools
-  build-depends:    base     >= 4.7  && < 4.9
-                    , random >= 1.0
-                    , vector >= 0.10
-                    , vector-algorithms >= 0.6
+  build-depends:
+      base               >=4.7  && <4.9
+    , random             >=1.0
+    , vector             >=0.10
+    , vector-algorithms  >=0.6
+
   hs-source-dirs:   src
   exposed:          True
   buildable:        True
   default-language: Haskell2010
   ghc-options:
-                    -Wall
-                    -O2
-                    -rtsopts
-                    -funbox-strict-fields
-                    -threaded
-                    -auto-all
-                    -caf-all
+    -Wall -O2 -rtsopts -funbox-strict-fields -threaded -auto-all
+    -caf-all
