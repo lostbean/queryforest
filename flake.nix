@@ -35,11 +35,13 @@
             pkgs.zlib
             treefmtWrapper.config.build.wrapper
             pkgs.nixpkgs-fmt
+            pkgs.lefthook
           ];
 
           shellHook = ''
             echo "queryforest Dev Environment Loaded"
             echo "GHC version: $(ghc --version)"
+            lefthook install
           '';
         };
       }

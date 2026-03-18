@@ -2,4 +2,4 @@ pre-commit:
   commands:
     format:
       glob: "*"
-      run: nix fmt {staged_files} && git add {staged_files}
+      run: nix fmt --no-warn-dirty {staged_files} && git add {staged_files}
