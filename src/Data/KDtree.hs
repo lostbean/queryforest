@@ -24,7 +24,7 @@ class Point p where
     dist :: p -> p -> Double
     dist a b = sum . map diff2 $ [0 .. dimension a - 1]
       where
-        diff2 i = abs (coord i a - coord i b)
+        diff2 i = (coord i a - coord i b) ^ (2 :: Int)
 
 -- | compareDistance p a b  compares the distances of a and b to p.
 compareDistance :: (Point p) => p -> p -> p -> Ordering
@@ -105,13 +105,14 @@ nearestNeighbor (KdNode l p i r axis) probe
   where
     xProbe = coord axis probe
     xp = coord axis p
-    d = dist p probe
     findNearest tree1 tree2 =
         let
             candidates1 = case nearestNeighbor tree1 probe of
                 Nothing -> [(i, p)]
                 Just best1 -> [best1, (i, p)]
-            sphereIntersectsPlane = (abs $ xProbe - xp) <= d
+            bestPoint = L.minimumBy (compareDistance probe `on` snd) $ candidates1
+            d = dist probe (snd bestPoint)
+            sphereIntersectsPlane = (xProbe - xp) ^ (2 :: Int) <= d
             candidates2
                 | sphereIntersectsPlane = candidates1 ++ maybeToList (nearestNeighbor tree2 probe)
                 | otherwise = candidates1
@@ -131,14 +132,14 @@ nearNeighbors (KdNode l p i r axis) radius probe
         let
             nearest = maybePivot ++ nearNeighbors l radius probe
          in
-            if xProbe + abs radius > xp
+            if (xProbe - xp) ^ (2 :: Int) <= radius
                 then nearNeighbors r radius probe ++ nearest
                 else nearest
     | otherwise =
         let
             nearest = maybePivot ++ nearNeighbors r radius probe
          in
-            if xProbe - abs radius < xp
+            if (xProbe - xp) ^ (2 :: Int) <= radius
                 then nearNeighbors l radius probe ++ nearest
                 else nearest
   where
