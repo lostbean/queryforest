@@ -33,4 +33,3 @@ instance KDT.Point V3 where
     coord 1 (_, b, _) = b
     coord 2 (_, _, c) = c
     coord _ _ = error "Out of bounds"
-    dist a b = let d = VP.dist a b in d * d -- KDtree uses squared distance

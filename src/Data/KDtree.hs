@@ -20,15 +20,19 @@ class Point p where
     -- | coord gets the k'th coordinate, starting from 0.
     coord :: Int -> p -> Double
 
-    -- | dist returns the squared distance between two points.
+    -- | dist returns the Euclidean distance between two points.
     dist :: p -> p -> Double
-    dist a b = sum . map diff2 $ [0 .. dimension a - 1]
+    dist a b = sqrt $ dist2 a b
+
+    -- | dist2 returns the squared Euclidean distance between two points (used internally for efficiency).
+    dist2 :: p -> p -> Double
+    dist2 a b = sum . map diff2 $ [0 .. dimension a - 1]
       where
         diff2 i = (coord i a - coord i b) ^ (2 :: Int)
 
 -- | compareDistance p a b  compares the distances of a and b to p.
 compareDistance :: (Point p) => p -> p -> p -> Ordering
-compareDistance p a b = dist p a `compare` dist p b
+compareDistance p a b = dist2 p a `compare` dist2 p b
 
 data KdTree point
     = KdNode
@@ -111,39 +115,41 @@ nearestNeighbor (KdNode l p i r axis) probe
                 Nothing -> [(i, p)]
                 Just best1 -> [best1, (i, p)]
             bestPoint = L.minimumBy (compareDistance probe `on` snd) $ candidates1
-            d = dist probe (snd bestPoint)
-            sphereIntersectsPlane = (xProbe - xp) ^ (2 :: Int) <= d
+            d2 = dist2 probe (snd bestPoint)
+            sphereIntersectsPlane = (xProbe - xp) ^ (2 :: Int) <= d2
             candidates2
                 | sphereIntersectsPlane = candidates1 ++ maybeToList (nearestNeighbor tree2 probe)
                 | otherwise = candidates1
          in
             Just . L.minimumBy (compareDistance probe `on` snd) $ candidates2
 
--- | nearNeighbors tree p returns all neighbors within distance r from p in tree.
+-- | nearNeighbors tree radius p returns all neighbors within Euclidean distance radius from p in tree.
 nearNeighbors :: (Point p) => KdTree p -> Double -> p -> [(Int, p, Double)]
 nearNeighbors KdEmpty _ _ = []
 nearNeighbors (KdNode KdEmpty p i KdEmpty _) radius probe
-    | d <= radius = [(i, p, d)]
+    | d2 <= r2 = [(i, p, sqrt d2)]
     | otherwise = []
   where
-    d = dist p probe
+    r2 = radius * radius
+    d2 = dist2 p probe
 nearNeighbors (KdNode l p i r axis) radius probe
     | xProbe <= xp =
         let
             nearest = maybePivot ++ nearNeighbors l radius probe
          in
-            if (xProbe - xp) ^ (2 :: Int) <= radius
+            if (xProbe - xp) ^ (2 :: Int) <= r2
                 then nearNeighbors r radius probe ++ nearest
                 else nearest
     | otherwise =
         let
             nearest = maybePivot ++ nearNeighbors r radius probe
          in
-            if (xProbe - xp) ^ (2 :: Int) <= radius
+            if (xProbe - xp) ^ (2 :: Int) <= r2
                 then nearNeighbors l radius probe ++ nearest
                 else nearest
   where
     xProbe = coord axis probe
     xp = coord axis p
-    d = dist probe p
-    maybePivot = if d <= radius then [(i, p, d)] else []
+    r2 = radius * radius
+    d2 = dist2 probe p
+    maybePivot = if d2 <= r2 then [(i, p, sqrt d2)] else []
