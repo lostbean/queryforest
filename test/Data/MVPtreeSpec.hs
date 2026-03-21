@@ -1,6 +1,5 @@
 module Data.MVPtreeSpec (spec) where
 
-import Data.Function (on)
 import qualified Data.List as L
 import qualified Data.Vector.Unboxed as U
 import Test.Hspec

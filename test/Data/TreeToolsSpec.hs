@@ -2,8 +2,6 @@ module Data.TreeToolsSpec (spec) where
 
 import qualified Data.List as L
 import qualified Data.Vector as V
-import qualified Data.Vector.Unboxed as U
-import System.Random
 import Test.Hspec
 import Test.QuickCheck
 
@@ -38,9 +36,9 @@ spec = do
                         let i = length sorted `div` 2
                         let expectedMedian =
                                 if i == 0
-                                    then (getD (head sorted))
+                                    then getD (sorted !! 0)
                                     else
                                         if i == length sorted
-                                            then (getD (last sorted))
+                                            then getD (sorted !! (length sorted - 1))
                                             else 0.5 * (getD (sorted !! (i - 1)) + getD (sorted !! i))
                         median `shouldBe` expectedMedian

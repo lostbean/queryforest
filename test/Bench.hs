@@ -2,6 +2,7 @@
 
 module Main where
 
+import Data.Common (V3)
 import qualified Data.Vector.Unboxed as U
 import System.Random
 
@@ -9,26 +10,6 @@ import qualified Data.BlazeVPtree as BVP
 import qualified Data.VPtree as VP
 
 import Data.Time.Clock
-
-type V3 = (Double, Double, Double)
-
-instance VP.Metric V3 where
-    dist (a1, a2, a3) (b1, b2, b3) =
-        let
-            x = b1 - a1
-            y = b2 - a2
-            z = b3 - a3
-         in
-            sqrt $ x * x + y * y + z * z
-
-instance BVP.Metric V3 where
-    dist (a1, a2, a3) (b1, b2, b3) =
-        let
-            x = b1 - a1
-            y = b2 - a2
-            z = b3 - a3
-         in
-            sqrt $ x * x + y * y + z * z
 
 getD :: IO [Double]
 getD = fmap (randomRs (0, 1)) newStdGen

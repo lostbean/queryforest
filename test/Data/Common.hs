@@ -1,9 +1,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
-module Data.Common where
-
-import Test.QuickCheck
+module Data.Common (V3) where
 
 import qualified Data.BlazeVPtree as BVP
 import qualified Data.KDtree as KDT

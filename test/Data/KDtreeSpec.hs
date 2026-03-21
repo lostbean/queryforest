@@ -2,7 +2,6 @@ module Data.KDtreeSpec (spec) where
 
 import Data.Function (on)
 import qualified Data.List as L
-import Data.Maybe
 import qualified Data.Vector as V
 import Test.Hspec
 import Test.QuickCheck
